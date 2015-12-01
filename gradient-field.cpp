@@ -23,11 +23,25 @@ GLuint texture = 0x00;
 // Points //////////////////////////////////////////////////////////////////////
 
 typedef float point[ DIMENSIONS ];
+typedef point curve[ 4 ];
 
-point test_bezier[] = { {  48, 272 },
-                        { 176, 400 },
-                        { 336, 114 },
-                        { 464, 272 } };
+curve test_bezier = { {  48, 272 },
+                      { 176, 400 },
+                      { 336, 114 },
+                      { 464, 272 } };
+
+/* 0----1
+ * |    |
+ * |    |
+ * 3----2
+ */
+
+curve test_gradient_field[ 4 ];
+
+unsigned char test_gradient_colors[ 4 ][ 3 ] = { { 0xFF, 0x00, 0x00 },
+                                                 { 0x00, 0xFF, 0x00 },
+                                                 { 0x00, 0x00, 0xFF },
+                                                 { 0x00, 0x00, 0x00 } };
 
 // Functions ///////////////////////////////////////////////////////////////////
 
@@ -62,7 +76,7 @@ bool setUpGLFW()
     return true;
 }
 
-void getBezierPoint( float t, point curve[ 4 ], point& p )
+void getBezierPoint( float t, curve c, point& p )
 {
     float t_term_0 = ( 1 - t ) * ( 1 - t ) * ( 1 - t );
     float t_term_1 = 3 * ( 1 - t ) * ( 1 - t ) * t;
@@ -70,10 +84,36 @@ void getBezierPoint( float t, point curve[ 4 ], point& p )
     float t_term_3 = t * t * t;
     
     for( int i = 0; i < DIMENSIONS; ++i )
-        p[ i ] =   curve[ 0 ][ i ] * t_term_0
-                 + curve[ 1 ][ i ] * t_term_1
-                 + curve[ 2 ][ i ] * t_term_2
-                 + curve[ 3 ][ i ] * t_term_3;
+        p[ i ] =   c[ 0 ][ i ] * t_term_0
+                 + c[ 1 ][ i ] * t_term_1
+                 + c[ 2 ][ i ] * t_term_2
+                 + c[ 3 ][ i ] * t_term_3;
+}
+
+// DEVEL:
+#define DITHER_D 10.0f
+
+void projectBezierPoint( point& original, curve quad[ 4 ], point& projected )
+{
+    // Return normalized
+    
+    float d = ( float )RAND_MAX / ( 2 * DITHER_D );
+    
+    float dither_x = DITHER_D - ( float )rand() / d;
+    float dither_y = DITHER_D - ( float )rand() / d;
+    
+    projected[ 0 ] = ( original[ 0 ] + dither_x ) / VIEW_WIDTH;
+    projected[ 1 ] = ( original[ 1 ] + dither_y ) / VIEW_HEIGHT;
+    
+    if( projected[ 0 ] > 1.0f )
+        projected[ 0 ] = 1.0f;
+    else if( projected[ 0 ] < 0.0f )
+        projected[ 0 ] = 0.0f;
+    
+    if( projected[ 1 ] > 1.0f )
+        projected[ 1 ] = 1.0f;
+    else if( projected[ 1 ] < 0.0f )
+        projected[ 1 ] = 0.0f;
 }
 
 void initTexture()
@@ -84,9 +124,9 @@ void initTexture()
 
 void drawBezier()
 {
-    initTexture();
+    // initTexture();
     
-    std::cout << "Texture initialized\n";
+    // std::cout << "Texture initialized\n";
     
     glfwMakeContextCurrent( window );
     
@@ -104,35 +144,47 @@ void drawBezier()
     
     glColor4f( 1.0, 1.0f, 1.0f, 1.0f );
     
-    std::cout << "Initial setup done\n";
+    // std::cout << "Initial setup done\n";
     
-    point p;
+    for( int x = 0; x < VIEW_WIDTH; ++x )
+        for( int y = 0; y < VIEW_HEIGHT; ++y )
+        {
+            point original;
+            original[ 0 ] = x;
+            original[ 1 ] = y;
+            
+            point projected;
+            
+            projectBezierPoint( original, test_gradient_field, projected );
+            
+            int pos = ( x * VIEW_HEIGHT + y ) * 3;
+            
+            unsigned char top_grad[ 3 ];
+            unsigned char bot_grad[ 3 ];
+            
+            top_grad[ 0 ] =           projected[ 0 ]   * test_gradient_colors[ 0 ][ 0 ]
+                            + ( 1.0 - projected[ 0 ] ) * test_gradient_colors[ 1 ][ 0 ];
+            top_grad[ 1 ] =           projected[ 0 ]   * test_gradient_colors[ 0 ][ 1 ]
+                            + ( 1.0 - projected[ 0 ] ) * test_gradient_colors[ 1 ][ 1 ];
+            top_grad[ 2 ] =           projected[ 0 ]   * test_gradient_colors[ 0 ][ 2 ]
+                            + ( 1.0 - projected[ 0 ] ) * test_gradient_colors[ 1 ][ 2 ];
+            
+            bot_grad[ 0 ] =           projected[ 0 ]   * test_gradient_colors[ 3 ][ 0 ]
+                            + ( 1.0 - projected[ 0 ] ) * test_gradient_colors[ 2 ][ 0 ];
+            bot_grad[ 1 ] =           projected[ 0 ]   * test_gradient_colors[ 3 ][ 1 ]
+                            + ( 1.0 - projected[ 0 ] ) * test_gradient_colors[ 2 ][ 1 ];
+            bot_grad[ 2 ] =           projected[ 0 ]   * test_gradient_colors[ 3 ][ 2 ]
+                            + ( 1.0 - projected[ 0 ] ) * test_gradient_colors[ 2 ][ 2 ];
+            
+            texture_data[ pos + 0 ] =           projected[ 1 ]   * top_grad[ 0 ]
+                                      + ( 1.0 - projected[ 1 ] ) * bot_grad[ 0 ];
+            texture_data[ pos + 1 ] =           projected[ 1 ]   * top_grad[ 1 ]
+                                      + ( 1.0 - projected[ 1 ] ) * bot_grad[ 1 ];
+            texture_data[ pos + 2 ] =           projected[ 1 ]   * top_grad[ 2 ]
+                                      + ( 1.0 - projected[ 1 ] ) * bot_grad[ 2 ];
+        }
     
-    for( int i = 0; i < 256; ++i )
-    {
-        getBezierPoint( i / 256.0f, test_bezier, p );
-        
-        int x = p[ 0 ];
-        int y = p[ 1 ];
-        
-        // std::cout << "Got point "
-        //           << p[ 0 ]
-        //           << ","
-        //           << p[ 1 ]
-        //           << " (on texture: "
-        //           << x
-        //           << ","
-        //           << y
-        //           << ")\n";
-        
-        int pos = ( y * VIEW_WIDTH + x ) * 3;
-        
-        texture_data[ pos + 0 ] = 0x00;
-        texture_data[ pos + 1 ] = 0x00;
-        texture_data[ pos + 2 ] = 0x00;
-    }
-    
-    std::cout << "Wrote curve\n";
+    // std::cout << "Computed gradient\n";
     
     glBindTexture( GL_TEXTURE_2D, texture );
     glTexImage2D( GL_TEXTURE_2D,
@@ -155,20 +207,20 @@ void drawBezier()
     if( gl_error != GL_NO_ERROR )
         std::cout << "Could not create OpenGL texture\n";
     
-    std::cout << "Created OpenGL texture\n";
+    // std::cout << "Created OpenGL texture\n";
     
     glBindTexture( GL_TEXTURE_2D, texture );
     
     glBegin( GL_QUADS );
     {
         glTexCoord2d( 0, 0 );
-        glVertex2i( 0, 0 );
+        glVertex2i( VIEW_WIDTH, VIEW_HEIGHT );
         
         glTexCoord2d( 0, 1.0f );
         glVertex2i( 0, VIEW_HEIGHT );
         
         glTexCoord2d( 1.0f, 1.0f );
-        glVertex2i( VIEW_WIDTH, VIEW_HEIGHT );
+        glVertex2i( 0, 0 );
         
         glTexCoord2d( 1.0f, 0 );
         glVertex2i( VIEW_WIDTH, 0 );
@@ -177,34 +229,34 @@ void drawBezier()
     
     glBindTexture( GL_TEXTURE_2D, 0x00 );
     
-    // DEBUG:
-    {
-        glColor4f( 1.0f, 0.0f, 0.0f, 0.5f );
+    // // DEBUG:
+    // {
+    //     glColor4f( 1.0f, 0.0f, 0.0f, 0.5f );
         
-        glBegin( GL_QUADS );
-        {
-            glVertex2i( 0, 0 );
+    //     glBegin( GL_QUADS );
+    //     {
+    //         glVertex2i( 0, 0 );
             
-            glVertex2i( 0, VIEW_HEIGHT );
+    //         glVertex2i( 0, VIEW_HEIGHT );
             
-            glVertex2i( VIEW_WIDTH, VIEW_HEIGHT );
+    //         glVertex2i( VIEW_WIDTH, VIEW_HEIGHT );
             
-            glVertex2i( VIEW_WIDTH, 0 );
-        }
-        glEnd();
+    //         glVertex2i( VIEW_WIDTH, 0 );
+    //     }
+    //     glEnd();
         
-        glColor4f( 1.0f, 1.0f, 1.0f, 1.0f );
-    }
+    //     glColor4f( 1.0f, 1.0f, 1.0f, 1.0f );
+    // }
     
-    std::cout << "Drew texture\n";
+    // std::cout << "Drew texture\n";
     
     glfwSwapBuffers( window );
     
-    std::cout << "Swapped buffers\n";
+    // std::cout << "Swapped buffers\n";
     
     glfwWaitEvents();
     
-    std::cout << "Wating...\n";
+    // std::cout << "Wating...\n";
     
     while( !glfwWindowShouldClose( window ) )
         glfwWaitEvents();
@@ -216,6 +268,9 @@ void drawBezier()
 
 int main( int argc, char* argv[] )
 {
+    unsigned int seed = time( NULL );
+    srand(seed);
+    
     if( !setUpGLFW() )
         return 1;
     
