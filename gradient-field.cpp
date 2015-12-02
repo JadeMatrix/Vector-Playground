@@ -162,19 +162,28 @@ void drawBezier( curve& c, int steps, unsigned char fill )
             // int pos = ( x * VIEW_HEIGHT + y ) * 3;
             int pos = ( y * VIEW_WIDTH + ( VIEW_HEIGHT - 1 - x ) ) * 3;
             
-            texture_data[ pos + 0 ] = fill;
-            texture_data[ pos + 1 ] = fill;
-            texture_data[ pos + 2 ] = fill;
+            if( i % 10 )
+            {
+                texture_data[ pos + 0 ] = fill;
+                texture_data[ pos + 1 ] = fill;
+                texture_data[ pos + 2 ] = fill;
+            }
+            else
+            {
+                texture_data[ pos + 0 ] = ~fill;
+                texture_data[ pos + 1 ] = ~fill;
+                texture_data[ pos + 2 ] = ~fill;
+            }
         }
 }
 
-void drawField( int cells )
+void drawField( int dividers )
 {
     // Draw field grid /////////////////////////////////////////////////////////
     
-    float divisor = cells + 1;
+    float divisor = dividers + 1;
     
-    for( int i = 1; i < cells; ++i )
+    for( int i = 1; i <= dividers; ++i )
     {
         float lerp = i / divisor;
         
@@ -202,7 +211,7 @@ void drawField( int cells )
         drawBezier( mn, 256, 0x80 );
     }
     
-    for( int i = 1; i < cells; ++i )
+    for( int i = 1; i <= dividers; ++i )
     {
         float lerp = i / divisor;
         
@@ -211,15 +220,15 @@ void drawField( int cells )
         getBezierPoint( lerp, test_gradient_field[ 0 ], mn[ 0 ] );
         getBezierPoint( 1 - lerp, test_gradient_field[ 2 ], mn[ 3 ] );
         
-        mn[ 1 ][ 0 ] =         lerp   * test_gradient_field[ 3 ][ 2 ][ 0 ]
-                       + ( 1 - lerp ) * test_gradient_field[ 2 ][ 1 ][ 0 ];
-        mn[ 1 ][ 1 ] =         lerp   * test_gradient_field[ 3 ][ 2 ][ 1 ]
-                       + ( 1 - lerp ) * test_gradient_field[ 2 ][ 1 ][ 1 ];
+        mn[ 1 ][ 0 ] =         lerp   * test_gradient_field[ 1 ][ 1 ][ 0 ]
+                       + ( 1 - lerp ) * test_gradient_field[ 3 ][ 2 ][ 0 ];
+        mn[ 1 ][ 1 ] =         lerp   * test_gradient_field[ 1 ][ 1 ][ 1 ]
+                       + ( 1 - lerp ) * test_gradient_field[ 3 ][ 2 ][ 1 ];
         
-        mn[ 2 ][ 0 ] =         lerp   * test_gradient_field[ 3 ][ 1 ][ 0 ]
-                       + ( 1 - lerp ) * test_gradient_field[ 2 ][ 2 ][ 0 ];
-        mn[ 2 ][ 1 ] =         lerp   * test_gradient_field[ 3 ][ 1 ][ 1 ]
-                       + ( 1 - lerp ) * test_gradient_field[ 2 ][ 2 ][ 1 ];
+        mn[ 2 ][ 0 ] =         lerp   * test_gradient_field[ 1 ][ 2 ][ 0 ]
+                       + ( 1 - lerp ) * test_gradient_field[ 3 ][ 1 ][ 0 ];
+        mn[ 2 ][ 1 ] =         lerp   * test_gradient_field[ 1 ][ 2 ][ 1 ]
+                       + ( 1 - lerp ) * test_gradient_field[ 3 ][ 1 ][ 1 ];
         
         drawBezier( mn, 256, 0x80 );
     }
@@ -227,7 +236,8 @@ void drawField( int cells )
     // Draw field bounds ///////////////////////////////////////////////////////
     
     for( int i = 0; i < 4; ++i )
-        drawBezier( test_gradient_field[ i ], 256, 0xFF );
+        drawBezier( test_gradient_field[ i ], 256, 0xFF * ( i % 2 ) );
+        // drawBezier( test_gradient_field[ i ], 256, 0x00 );
 }
 
 void drawStuff()
@@ -299,7 +309,7 @@ void drawStuff()
     
     // Draw field curves ///////////////////////////////////////////////////////
     
-    drawField( 10 );
+    drawField( 20 );
     
     // Draw ////////////////////////////////////////////////////////////////////
     
