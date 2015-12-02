@@ -95,7 +95,13 @@ bool setUpGLFW()
     return true;
 }
 
-void getBezierPoint( float t, curve& c, point& p )
+void initTexture()
+{
+    for( int i = 0; i < VIEW_WIDTH * VIEW_HEIGHT * 3; ++i )
+        texture_data[ i ] = 0xFF;
+}
+
+void getBezierPoint( float t, const curve& c, point& p )
 {
     float t_term_0 = ( 1 - t ) * ( 1 - t ) * ( 1 - t );
     float t_term_1 = 3 * ( 1 - t ) * ( 1 - t ) * t;
@@ -113,8 +119,8 @@ void getBezierPoint( float t, curve& c, point& p )
  * the arbitrary space defined by the closed bezier quad, optionally clamping
  * values that lie outside the quad between 0.0 and 1.0
  */
-void projectBezierPoint( point& original,
-                         bquad quad,
+void projectBezierPoint( const point& original,
+                         const bquad quad,
                          point& projected,
                          bool clamp )
 {
@@ -152,13 +158,7 @@ void projectBezierPoint( point& original,
     }
 }
 
-void initTexture()
-{
-    for( int i = 0; i < VIEW_WIDTH * VIEW_HEIGHT * 3; ++i )
-        texture_data[ i ] = 0xFF;
-}
-
-void drawBezier( curve& c, int steps, unsigned char fill )
+void drawBezier( const curve& c, int steps, unsigned char fill )
 {
     float div = 0xFF;
     
@@ -184,6 +184,95 @@ void drawBezier( curve& c, int steps, unsigned char fill )
     glColor4f( 1.0f, 1.0f, 1.0f, 1.0f );
 }
 
+/* Bezier interpolation method 1
+ * Simple linear interpolation of handles
+ */
+void interpolateBezier1( float v,
+                         const curve& begin,
+                         const curve& end,
+                         const curve& from,
+                         const curve& to,
+                         curve& final )
+{
+    getBezierPoint(     v, begin, final[ 0 ] );
+    getBezierPoint( 1 - v,   end, final[ 3 ] );
+    
+    final[ 1 ][ 0 ] =         v   * from[ 1 ][ 0 ]
+                      + ( 1 - v ) *   to[ 2 ][ 0 ];
+    final[ 1 ][ 1 ] =         v   * from[ 1 ][ 1 ]
+                      + ( 1 - v ) *   to[ 2 ][ 1 ];
+    
+    final[ 2 ][ 0 ] =         v   * from[ 2 ][ 0 ]
+                      + ( 1 - v ) *   to[ 1 ][ 0 ];
+    final[ 2 ][ 1 ] =         v   * from[ 2 ][ 1 ]
+                      + ( 1 - v ) *   to[ 1 ][ 1 ];
+}
+/* Bezier interpolation method 2
+ * Linear interpolation of handles, offset to the point they attach to
+ */
+void interpolateBezier2( float v,
+                         const curve& begin,
+                         const curve& end,
+                         const curve& from,
+                         const curve& to,
+                         curve& final )
+{
+    getBezierPoint(     v, begin, final[ 0 ] );
+    getBezierPoint( 1 - v,   end, final[ 3 ] );
+    
+    final[ 1 ][ 0 ] =         v   * (   from[ 1 ][ 0 ]
+                                      - from[ 0 ][ 0 ] )
+                      + ( 1 - v ) * (     to[ 2 ][ 0 ]
+                                      -   to[ 3 ][ 0 ] )
+                      + final[ 0 ][ 0 ];
+    final[ 1 ][ 1 ] =         v   * (   from[ 1 ][ 1 ]
+                                      - from[ 0 ][ 1 ] )
+                      + ( 1 - v ) * (     to[ 2 ][ 1 ]
+                                      -   to[ 3 ][ 1 ] )
+                      + final[ 0 ][ 1 ];
+    
+    final[ 2 ][ 0 ] =         v   * (   from[ 2 ][ 0 ]
+                                      - from[ 3 ][ 0 ] )
+                      + ( 1 - v ) * (     to[ 1 ][ 0 ]
+                                      -   to[ 0 ][ 0 ] )
+                      + final[ 3 ][ 0 ];
+    final[ 2 ][ 1 ] =         v   * (   from[ 2 ][ 1 ]
+                                      - from[ 3 ][ 1 ] )
+                      + ( 1 - v ) * (     to[ 1 ][ 1 ]
+                                      -   to[ 0 ][ 1 ] )
+                      + final[ 3 ][ 1 ];
+}
+/* Bezier interpolation method 3
+ * 1D bezier interpolation between handles
+ */
+void interpolateBezier3( float v,
+                         const curve& begin,
+                         const curve& end,
+                         const curve& from,
+                         const curve& to,
+                         curve& final )
+{
+    getBezierPoint(     v, begin, final[ 0 ] );
+    getBezierPoint( 1 - v,   end, final[ 3 ] );
+    
+    
+}
+/* Bezier interpolation method 4
+ * 1D bezier interpolation between handles, offset to attached point
+ */
+void interpolateBezier4( float v,
+                         const curve& begin,
+                         const curve& end,
+                         const curve& from,
+                         const curve& to,
+                         curve& final )
+{
+    getBezierPoint(     v, begin, final[ 0 ] );
+    getBezierPoint( 1 - v,   end, final[ 3 ] );
+    
+    
+}
+
 void drawField( int dividers )
 {
     // Draw field grid /////////////////////////////////////////////////////////
@@ -196,52 +285,21 @@ void drawField( int dividers )
         
         curve mn;
         
-        getBezierPoint( lerp, test_gradient_field[ 3 ], mn[ 0 ] );
-        getBezierPoint( 1 - lerp, test_gradient_field[ 1 ], mn[ 3 ] );
-        
-        // Handle interpolation method 1 ///////////////////////////////////////
-        // Linear interpolation between handles
-        
-        mn[ 1 ][ 0 ] =         lerp   * test_gradient_field[ 0 ][ 1 ][ 0 ]
-                       + ( 1 - lerp ) * test_gradient_field[ 2 ][ 2 ][ 0 ];
-        mn[ 1 ][ 1 ] =         lerp   * test_gradient_field[ 0 ][ 1 ][ 1 ]
-                       + ( 1 - lerp ) * test_gradient_field[ 2 ][ 2 ][ 1 ];
-        
-        mn[ 2 ][ 0 ] =         lerp   * test_gradient_field[ 0 ][ 2 ][ 0 ]
-                       + ( 1 - lerp ) * test_gradient_field[ 2 ][ 1 ][ 0 ];
-        mn[ 2 ][ 1 ] =         lerp   * test_gradient_field[ 0 ][ 2 ][ 1 ]
-                       + ( 1 - lerp ) * test_gradient_field[ 2 ][ 1 ][ 1 ];
-        
+        interpolateBezier1( lerp,
+                            test_gradient_field[ 3 ],
+                            test_gradient_field[ 1 ],
+                            test_gradient_field[ 0 ],
+                            test_gradient_field[ 2 ],
+                            mn );
         drawBezier( mn, 256, 0x00 );
         
-        // Handle interpolation method 2 ///////////////////////////////////////
-        // Linear interpolation between handles, offset to attached point
-        
-        mn[ 1 ][ 0 ] =         lerp   * ( test_gradient_field[ 0 ][ 1 ][ 0 ] - test_gradient_field[ 0 ][ 0 ][ 0 ] )
-                       + ( 1 - lerp ) * ( test_gradient_field[ 2 ][ 2 ][ 0 ] - test_gradient_field[ 2 ][ 3 ][ 0 ] )
-                       + mn[ 0 ][ 0 ];
-        mn[ 1 ][ 1 ] =         lerp   * ( test_gradient_field[ 0 ][ 1 ][ 1 ] - test_gradient_field[ 0 ][ 0 ][ 1 ] )
-                       + ( 1 - lerp ) * ( test_gradient_field[ 2 ][ 2 ][ 1 ] - test_gradient_field[ 2 ][ 3 ][ 1 ] )
-                       + mn[ 0 ][ 1 ];
-        
-        mn[ 2 ][ 0 ] =         lerp   * ( test_gradient_field[ 0 ][ 2 ][ 0 ] - test_gradient_field[ 0 ][ 3 ][ 0 ] )
-                       + ( 1 - lerp ) * ( test_gradient_field[ 2 ][ 1 ][ 0 ] - test_gradient_field[ 2 ][ 0 ][ 0 ] )
-                       + mn[ 3 ][ 0 ];
-        mn[ 2 ][ 1 ] =         lerp   * ( test_gradient_field[ 0 ][ 2 ][ 1 ] - test_gradient_field[ 0 ][ 3 ][ 1 ] )
-                       + ( 1 - lerp ) * ( test_gradient_field[ 2 ][ 1 ][ 1 ] - test_gradient_field[ 2 ][ 0 ][ 1 ] )
-                       + mn[ 3 ][ 1 ];
-        
+        interpolateBezier2( lerp,
+                            test_gradient_field[ 3 ],
+                            test_gradient_field[ 1 ],
+                            test_gradient_field[ 0 ],
+                            test_gradient_field[ 2 ],
+                            mn );
         drawBezier( mn, 256, 0x80 );
-        
-        // Handle interpolation method 3 ///////////////////////////////////////
-        // 1D bezier interpolation between handles
-        
-        
-        
-        // Handle interpolation method 4 ///////////////////////////////////////
-        // 1D bezier interpolation between handles, offset to attached point
-        
-        
     }
     
     for( int i = 1; i <= dividers; ++i )
@@ -250,52 +308,21 @@ void drawField( int dividers )
         
         curve mn;
         
-        getBezierPoint( lerp, test_gradient_field[ 0 ], mn[ 0 ] );
-        getBezierPoint( 1 - lerp, test_gradient_field[ 2 ], mn[ 3 ] );
-        
-        // Handle interpolation method 1 ///////////////////////////////////////
-        // Linear interpolation between handles
-        
-        mn[ 1 ][ 0 ] =         lerp   * test_gradient_field[ 1 ][ 1 ][ 0 ]
-                       + ( 1 - lerp ) * test_gradient_field[ 3 ][ 2 ][ 0 ];
-        mn[ 1 ][ 1 ] =         lerp   * test_gradient_field[ 1 ][ 1 ][ 1 ]
-                       + ( 1 - lerp ) * test_gradient_field[ 3 ][ 2 ][ 1 ];
-        
-        mn[ 2 ][ 0 ] =         lerp   * test_gradient_field[ 1 ][ 2 ][ 0 ]
-                       + ( 1 - lerp ) * test_gradient_field[ 3 ][ 1 ][ 0 ];
-        mn[ 2 ][ 1 ] =         lerp   * test_gradient_field[ 1 ][ 2 ][ 1 ]
-                       + ( 1 - lerp ) * test_gradient_field[ 3 ][ 1 ][ 1 ];
-        
+        interpolateBezier1( lerp,
+                            test_gradient_field[ 0 ],
+                            test_gradient_field[ 2 ],
+                            test_gradient_field[ 1 ],
+                            test_gradient_field[ 3 ],
+                            mn );
         drawBezier( mn, 256, 0x00 );
         
-        // Handle interpolation method 2 ///////////////////////////////////////
-        // Linear interpolation between handles, offset to attached point
-        
-        mn[ 1 ][ 0 ] =         lerp   * ( test_gradient_field[ 1 ][ 1 ][ 0 ] - test_gradient_field[ 1 ][ 0 ][ 0 ] )
-                       + ( 1 - lerp ) * ( test_gradient_field[ 3 ][ 2 ][ 0 ] - test_gradient_field[ 3 ][ 3 ][ 0 ] )
-                       + mn[ 0 ][ 0 ];
-        mn[ 1 ][ 1 ] =         lerp   * ( test_gradient_field[ 1 ][ 1 ][ 1 ] - test_gradient_field[ 1 ][ 0 ][ 1 ] )
-                       + ( 1 - lerp ) * ( test_gradient_field[ 3 ][ 2 ][ 1 ] - test_gradient_field[ 3 ][ 3 ][ 1 ] )
-                       + mn[ 0 ][ 1 ];
-        
-        mn[ 2 ][ 0 ] =         lerp   * ( test_gradient_field[ 1 ][ 2 ][ 0 ] - test_gradient_field[ 1 ][ 3 ][ 0 ] )
-                       + ( 1 - lerp ) * ( test_gradient_field[ 3 ][ 1 ][ 0 ] - test_gradient_field[ 3 ][ 0 ][ 0 ] )
-                       + mn[ 3 ][ 0 ];
-        mn[ 2 ][ 1 ] =         lerp   * ( test_gradient_field[ 1 ][ 2 ][ 1 ] - test_gradient_field[ 1 ][ 3 ][ 1 ] )
-                       + ( 1 - lerp ) * ( test_gradient_field[ 3 ][ 1 ][ 1 ] - test_gradient_field[ 3 ][ 0 ][ 1 ] )
-                       + mn[ 3 ][ 1 ];
-        
+        interpolateBezier2( lerp,
+                            test_gradient_field[ 0 ],
+                            test_gradient_field[ 2 ],
+                            test_gradient_field[ 1 ],
+                            test_gradient_field[ 3 ],
+                            mn );
         drawBezier( mn, 256, 0x80 );
-        
-        // Handle interpolation method 3 ///////////////////////////////////////
-        // 1D bezier interpolation between handles
-        
-        
-        
-        // Handle interpolation method 4 ///////////////////////////////////////
-        // 1D bezier interpolation between handles, offset to attached point
-        
-        
     }
     
     // Draw field bounds ///////////////////////////////////////////////////////
