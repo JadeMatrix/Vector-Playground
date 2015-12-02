@@ -120,10 +120,21 @@ void projectBezierPoint( point& original,
 {
     // Project coordinates onto the 4-bezier space /////////////////////////////
     
-    projected[ 0 ] = original[ 0 ] /= VIEW_WIDTH;
-    projected[ 1 ] = original[ 1 ] /= VIEW_HEIGHT;
+    projected[ 0 ] = original[ 0 ];
+    projected[ 1 ] = original[ 1 ];
     
+    // if( projected[ 0 ] > 12 * 32 )
+    //     projected[ 0 ] = 12 * 32;
+    // else if( projected[ 0 ] < 4 * 32 )
+    //     projected[ 0 ] = 4 * 32;
     
+    // if( projected[ 1 ] > 12 * 32 )
+    //     projected[ 1 ] = 12 * 32;
+    // else if( projected[ 1 ] < 4 * 32 )
+    //     projected[ 1 ] = 4 * 32;
+    
+    projected[ 0 ] /= VIEW_WIDTH;
+    projected[ 1 ] /= VIEW_HEIGHT;
     
     // Clamp/clip projected values /////////////////////////////////////////////
     
@@ -149,32 +160,28 @@ void initTexture()
 
 void drawBezier( curve& c, int steps, unsigned char fill )
 {
-    for( int i = 0; i < steps; ++i )
+    float div = 0xFF;
+    
+    glColor4f( fill / div, fill / div, fill / div, 1.0f );
+    
+    glBegin( GL_LINE_STRIP );
+    {
+        for( int i = 0; i <= steps; ++i )
         {
             point p;
             
             getBezierPoint( i / ( float )steps, c, p );
             
-            int x = p[ 0 ];
-            int y = p[ 1 ];
+            // glColor4f( fill / div, fill / div, fill / div, 1.0f );
             
-            // int pos = ( y * VIEW_WIDTH + x ) * 3;
-            // int pos = ( x * VIEW_HEIGHT + y ) * 3;
-            int pos = ( y * VIEW_WIDTH + ( VIEW_HEIGHT - 1 - x ) ) * 3;
+            glVertex2i( p[ 0 ], VIEW_HEIGHT - p[ 1 ] );
             
-            if( i % 10 )
-            {
-                texture_data[ pos + 0 ] = fill;
-                texture_data[ pos + 1 ] = fill;
-                texture_data[ pos + 2 ] = fill;
-            }
-            else
-            {
-                texture_data[ pos + 0 ] = ~fill;
-                texture_data[ pos + 1 ] = ~fill;
-                texture_data[ pos + 2 ] = ~fill;
-            }
+            // fill = ~fill & 0xFF;
         }
+    }
+    glEnd();
+    
+    glColor4f( 1.0f, 1.0f, 1.0f, 1.0f );
 }
 
 void drawField( int dividers )
@@ -192,15 +199,23 @@ void drawField( int dividers )
         getBezierPoint( lerp, test_gradient_field[ 3 ], mn[ 0 ] );
         getBezierPoint( 1 - lerp, test_gradient_field[ 1 ], mn[ 3 ] );
         
-        // mn[ 1 ][ 0 ] =         lerp   * test_gradient_field[ 0 ][ 1 ][ 0 ]
-        //                + ( 1 - lerp ) * test_gradient_field[ 2 ][ 2 ][ 0 ];
-        // mn[ 1 ][ 1 ] =         lerp   * test_gradient_field[ 0 ][ 1 ][ 1 ]
-        //                + ( 1 - lerp ) * test_gradient_field[ 2 ][ 2 ][ 1 ];
+        // Handle interpolation method 1 ///////////////////////////////////////
+        // Linear interpolation between handles
         
-        // mn[ 2 ][ 0 ] =         lerp   * test_gradient_field[ 0 ][ 2 ][ 0 ]
-        //                + ( 1 - lerp ) * test_gradient_field[ 2 ][ 1 ][ 0 ];
-        // mn[ 2 ][ 1 ] =         lerp   * test_gradient_field[ 0 ][ 2 ][ 1 ]
-        //                + ( 1 - lerp ) * test_gradient_field[ 2 ][ 1 ][ 1 ];
+        mn[ 1 ][ 0 ] =         lerp   * test_gradient_field[ 0 ][ 1 ][ 0 ]
+                       + ( 1 - lerp ) * test_gradient_field[ 2 ][ 2 ][ 0 ];
+        mn[ 1 ][ 1 ] =         lerp   * test_gradient_field[ 0 ][ 1 ][ 1 ]
+                       + ( 1 - lerp ) * test_gradient_field[ 2 ][ 2 ][ 1 ];
+        
+        mn[ 2 ][ 0 ] =         lerp   * test_gradient_field[ 0 ][ 2 ][ 0 ]
+                       + ( 1 - lerp ) * test_gradient_field[ 2 ][ 1 ][ 0 ];
+        mn[ 2 ][ 1 ] =         lerp   * test_gradient_field[ 0 ][ 2 ][ 1 ]
+                       + ( 1 - lerp ) * test_gradient_field[ 2 ][ 1 ][ 1 ];
+        
+        drawBezier( mn, 256, 0x00 );
+        
+        // Handle interpolation method 2 ///////////////////////////////////////
+        // Linear interpolation between handles, offset to attached point
         
         mn[ 1 ][ 0 ] =         lerp   * ( test_gradient_field[ 0 ][ 1 ][ 0 ] - test_gradient_field[ 0 ][ 0 ][ 0 ] )
                        + ( 1 - lerp ) * ( test_gradient_field[ 2 ][ 2 ][ 0 ] - test_gradient_field[ 2 ][ 3 ][ 0 ] )
@@ -217,6 +232,16 @@ void drawField( int dividers )
                        + mn[ 3 ][ 1 ];
         
         drawBezier( mn, 256, 0x80 );
+        
+        // Handle interpolation method 3 ///////////////////////////////////////
+        // 1D bezier interpolation between handles
+        
+        
+        
+        // Handle interpolation method 4 ///////////////////////////////////////
+        // 1D bezier interpolation between handles, offset to attached point
+        
+        
     }
     
     for( int i = 1; i <= dividers; ++i )
@@ -228,15 +253,23 @@ void drawField( int dividers )
         getBezierPoint( lerp, test_gradient_field[ 0 ], mn[ 0 ] );
         getBezierPoint( 1 - lerp, test_gradient_field[ 2 ], mn[ 3 ] );
         
-        // mn[ 1 ][ 0 ] =         lerp   * test_gradient_field[ 1 ][ 1 ][ 0 ]
-        //                + ( 1 - lerp ) * test_gradient_field[ 3 ][ 2 ][ 0 ];
-        // mn[ 1 ][ 1 ] =         lerp   * test_gradient_field[ 1 ][ 1 ][ 1 ]
-        //                + ( 1 - lerp ) * test_gradient_field[ 3 ][ 2 ][ 1 ];
+        // Handle interpolation method 1 ///////////////////////////////////////
+        // Linear interpolation between handles
         
-        // mn[ 2 ][ 0 ] =         lerp   * test_gradient_field[ 1 ][ 2 ][ 0 ]
-        //                + ( 1 - lerp ) * test_gradient_field[ 3 ][ 1 ][ 0 ];
-        // mn[ 2 ][ 1 ] =         lerp   * test_gradient_field[ 1 ][ 2 ][ 1 ]
-        //                + ( 1 - lerp ) * test_gradient_field[ 3 ][ 1 ][ 1 ];
+        mn[ 1 ][ 0 ] =         lerp   * test_gradient_field[ 1 ][ 1 ][ 0 ]
+                       + ( 1 - lerp ) * test_gradient_field[ 3 ][ 2 ][ 0 ];
+        mn[ 1 ][ 1 ] =         lerp   * test_gradient_field[ 1 ][ 1 ][ 1 ]
+                       + ( 1 - lerp ) * test_gradient_field[ 3 ][ 2 ][ 1 ];
+        
+        mn[ 2 ][ 0 ] =         lerp   * test_gradient_field[ 1 ][ 2 ][ 0 ]
+                       + ( 1 - lerp ) * test_gradient_field[ 3 ][ 1 ][ 0 ];
+        mn[ 2 ][ 1 ] =         lerp   * test_gradient_field[ 1 ][ 2 ][ 1 ]
+                       + ( 1 - lerp ) * test_gradient_field[ 3 ][ 1 ][ 1 ];
+        
+        drawBezier( mn, 256, 0x00 );
+        
+        // Handle interpolation method 2 ///////////////////////////////////////
+        // Linear interpolation between handles, offset to attached point
         
         mn[ 1 ][ 0 ] =         lerp   * ( test_gradient_field[ 1 ][ 1 ][ 0 ] - test_gradient_field[ 1 ][ 0 ][ 0 ] )
                        + ( 1 - lerp ) * ( test_gradient_field[ 3 ][ 2 ][ 0 ] - test_gradient_field[ 3 ][ 3 ][ 0 ] )
@@ -253,13 +286,23 @@ void drawField( int dividers )
                        + mn[ 3 ][ 1 ];
         
         drawBezier( mn, 256, 0x80 );
+        
+        // Handle interpolation method 3 ///////////////////////////////////////
+        // 1D bezier interpolation between handles
+        
+        
+        
+        // Handle interpolation method 4 ///////////////////////////////////////
+        // 1D bezier interpolation between handles, offset to attached point
+        
+        
     }
     
     // Draw field bounds ///////////////////////////////////////////////////////
     
     for( int i = 0; i < 4; ++i )
-        drawBezier( test_gradient_field[ i ], 256, 0xFF * ( i % 2 ) );
-        // drawBezier( test_gradient_field[ i ], 256, 0x00 );
+        // drawBezier( test_gradient_field[ i ], 256, 0xFF * ( i % 2 ) );
+        drawBezier( test_gradient_field[ i ], 256, 0xFF );
 }
 
 void drawStuff()
@@ -329,11 +372,7 @@ void drawStuff()
     
     std::cout << "Computed gradient\n";
     
-    // Draw field curves ///////////////////////////////////////////////////////
-    
-    drawField( 20 );
-    
-    // Draw ////////////////////////////////////////////////////////////////////
+    // Draw gradient ///////////////////////////////////////////////////////////
     
     glBindTexture( GL_TEXTURE_2D, texture );
     glTexImage2D( GL_TEXTURE_2D,
@@ -356,6 +395,8 @@ void drawStuff()
     if( gl_error != GL_NO_ERROR )
         std::cout << "Could not create OpenGL texture\n";
     
+    glColor4f( 1.0f, 1.0f, 1.0f, 1.0f );
+    
     glBindTexture( GL_TEXTURE_2D, texture );
     
     glBegin( GL_QUADS );
@@ -376,11 +417,26 @@ void drawStuff()
     
     glBindTexture( GL_TEXTURE_2D, 0x00 );
     
+    // Draw field curves ///////////////////////////////////////////////////////
+    
+    glLineWidth( 1.0f );
+    
+    // glBegin( GL_LINE_STRIP );
+    // {
+    //     glVertex2i( 0, 0 );
+    //     glVertex2i( VIEW_WIDTH, VIEW_HEIGHT );
+    //     glVertex2i( VIEW_WIDTH, 0 );
+    //     glVertex2i( 0, VIEW_HEIGHT );
+    // }
+    // glEnd();
+    
+    drawField( 20 );
+    
+    // Wait for quit/exit //////////////////////////////////////////////////////
+    
     glfwSwapBuffers( window );
     
     std::cout << "Waiting for quit...\n";
-    
-    // Wait for quit/exit //////////////////////////////////////////////////////
     
     glfwWaitEvents();
     
